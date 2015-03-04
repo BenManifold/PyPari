@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Sat Oct 12 14:24:20 2013
-
 @author: Benjamin Manifold
 """
 
@@ -10,7 +9,6 @@ pari = ctypes.CDLL("/usr/lib/libpari.so")
 
 #Pari function return type declarations. This makes Ctypes happy. Avoids Segfaults.
 from restypes import *
-
 
 initialized = False
 #Must initialize the Pari stack before we do anything else.
@@ -35,38 +33,43 @@ def setAVMA(arg): #arg should be a recorded stack pointer
 #A class Wrapper for Pari Gens. Hopefully we will hide this behind a shell implementation.
 class Gen:
   #"Generic Pari Gen object"
-  def __init__(self, arg):
+  def __init__(self, arg):    
+            
     if isinstance(arg, int) or isinstance(arg, long):
       av = getAVMA() # record stack pointer location
       self.ref = ctypes.cast(pari.gclone(pari.stoi(arg)), #clonse result to heap
                  ctypes.POINTER(ctypes.c_long)) 
       setAVMA(av) # restore stack pointer location
-    if isinstance(arg, float):
+      
+    elif isinstance(arg, float):
       av = getAVMA()
       self.ref = ctypes.cast(pari.gclone(pari.dbltor(ctypes.c_double(arg))),
                  ctypes.POINTER(ctypes.c_long))
       setAVMA(av) 
-#Evaluates a string passed in as arg as it would in GP and makes the correct Pari Object.
-    if isinstance(arg, str):
+    #Evaluates a string passed in as arg as it would in GP and makes the correct Pari Object.
+    
+    elif isinstance(arg, str):
       av = getAVMA() 
       self.ref = ctypes.cast(pari.gclone(pari.gp_read_str(arg)), 
                  ctypes.POINTER(ctypes.c_long))
       setAVMA(av)
         
-    if isinstance(arg, list):
+    elif isinstance(arg, list):
       av = getAVMA()
       self.ref = ctypes.cast(pari.gclone(pari.listcreate(len(arg))),
-                 ctypes.POINTER(ctypes.c_long))
+                 ctypes.POINTER(ctypes.c_long))    
       for element in range(0, len(arg)): 
         pari.listput(self.ref, Gen(arg[element]).ref, element + 1)
         # self.ref = ctypes.cast(pari.gclone(pari.gp_read_str(arg.__repr__())),
         #           ctypes.POINTER(ctypes.c_long))
         setAVMA(av)
-        #Treat any ctypes pointer to a c_long as a gen in need of a class wrapper
-    if isinstance(arg, ctypes.POINTER(ctypes.c_long)):
+    
+    #Treat any ctypes pointer to a c_long as a gen in need of a class wrapper
+    elif isinstance(arg, ctypes.POINTER(ctypes.c_long)):
       av = getAVMA()
       self.ref = pari.gclone(arg)
       setAVMA(av)
+    
      
   def __add__(self, arg):
     av = getAVMA()
@@ -147,7 +150,10 @@ class Gen:
       return result
 
   def __repr__(self):
-    return ctypes.string_at(pari.GENtostr(self.ref))
+    try:
+      return ctypes.string_at(pari.GENtostr(self.ref))
+    except AttributeError:
+      pass
 
   def __del__(self):
     pari.gunclone(self.ref)
@@ -155,7 +161,18 @@ class Gen:
   #Returns the Gen type of some pari Gen object
   def gen_type(self):
     return ctypes.string_at(PyPari.pari.GENtostr(PyPari.pari.type0(self.ref)))
+
+
+##This should be the primary user interface to the gp command environment
+def gp_eval(arg):    
     
+  if isinstance(arg, Gen):
+    return arg
+        
+  else:
+    return Gen(arg)     
+      
+          
 #Takes an integer, returns the address of a c_long, representing a GEN, that is a T_INT. Can go anywhere Pari expects a Gen.
 def t_int(integer):
 #Type checking/truncating code goes here. We don't want reals or lists of something that looks like a c_long.    
